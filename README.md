@@ -2,6 +2,8 @@
 
 A "The War Within" style skin for the Questie tracker.
 
+![Preview Image of Questie - german](preview.png)
+
 ## Features
 - Skinned tracker header with full-width background
 - Zone headers use the War Within header texture
