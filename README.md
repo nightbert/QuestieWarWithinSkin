@@ -14,3 +14,5 @@ A "The War Within" style skin for the Questie tracker.
 1. Copy the `QuestieWarWithinSkin` folder into your WoW AddOns directory.
 2. Make sure `Questie` is enabled: https://github.com/Questie/Questie
 3. Reload your UI.
+
+Addon auf Curseforge: https://www.curseforge.com/wow/addons/questie-war-within-skin
