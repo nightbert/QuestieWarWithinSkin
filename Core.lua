@@ -1,6 +1,10 @@
 local ADDON, NS = ...
 
 local TEXROOT = "Interface\\AddOns\\" .. ADDON .. "\\Textures\\"
+local PVP_HEADER_TEX_W = 512
+local PVP_HEADER_TEX_H = 512
+local PVP_HEADER_CONTENT_H = 32
+local PVP_HEADER_CONTENT_W = PVP_HEADER_CONTENT_H + 4
 NS.tex = {
   header = TEXROOT .. "header",
   questTitle = TEXROOT .. "zonetext",
@@ -8,6 +12,8 @@ NS.tex = {
   titleHL = TEXROOT .. "UI-QuestTitleHighlight",
   itemBG = TEXROOT .. "UI-QuestItem",
   itemHL = TEXROOT .. "UI-QuestItemHighlight",
+  pvpHeaderAlliance = TEXROOT .. "pvp_header_a",
+  pvpHeaderHorde = TEXROOT .. "pvp_header_h",
 }
 
 NS.defaults = {
@@ -52,6 +58,25 @@ local function GetAccentColor()
     return NS.theme.accent[1], NS.theme.accent[2], NS.theme.accent[3]
   end
   return 0.9, 0.75, 0.35
+end
+
+local function GetPvpHeaderTexture()
+  local faction = UnitFactionGroup and UnitFactionGroup("player")
+  if faction == "Horde" then
+    return NS.tex.pvpHeaderHorde
+  end
+  if faction == "Alliance" then
+    return NS.tex.pvpHeaderAlliance
+  end
+  return NS.tex.pvpHeaderAlliance
+end
+
+local function StripPvpIcon(text)
+  if not text or not text:find("pvp_header_") then
+    return text
+  end
+  local cleaned = text:gsub("|T.-pvp_header_.-|t", "")
+  return cleaned:gsub("%s%s+", " "):gsub("^%s+", "")
 end
 
 local function IsAddOnLoadedSafe(name)
@@ -145,6 +170,15 @@ local function StyleLine(line)
 
   local isZone = line.mode == "zone"
   local isQuestTitle = line.mode == "quest" or line.mode == "achieve"
+  local isPvpQuest = false
+
+  if line.mode == "quest" then
+    local questId = line.Quest and line.Quest.Id or (line.expandQuest and line.expandQuest.questId)
+    local QuestieDB = questId and GetModule("QuestieDB")
+    if QuestieDB and QuestieDB.IsPvPQuest then
+      isPvpQuest = QuestieDB.IsPvPQuest(questId)
+    end
+  end
 
   if line.SetHighlightTexture then
     local target = isQuestTitle and NS.tex.questTitle or NS.tex.titleHL
@@ -164,6 +198,54 @@ local function StyleLine(line)
     end
     if line._qwwTextures.objectiveBG then
       line._qwwTextures.objectiveBG:Hide()
+    end
+  end
+
+  local pvpBg = EnsureTexture(line, "pvpBG", "BACKGROUND")
+  if pvpBg then
+    pvpBg:Hide()
+  end
+
+  if line.label then
+    local text = line.label:GetText()
+    if text and text:find("pvp_header_") then
+      line.label:SetText(StripPvpIcon(text))
+    end
+  end
+
+  local pvpIcon = EnsureTexture(line, "pvpIcon", "ARTWORK")
+  if pvpIcon then
+    if isPvpQuest and isQuestTitle and NS.db.enabled then
+      local target = GetPvpHeaderTexture()
+      if pvpIcon._qwwTexture ~= target then
+        pvpIcon:SetTexture(target)
+        pvpIcon._qwwTexture = target
+      end
+
+      local cropW = ThemeValue("pvpIconCropW", PVP_HEADER_CONTENT_W)
+      local cropH = ThemeValue("pvpIconCropH", PVP_HEADER_CONTENT_H)
+      local uMax = cropW / PVP_HEADER_TEX_W
+      local vMax = cropH / PVP_HEADER_TEX_H
+      if pvpIcon._qwwTexCoordU ~= uMax or pvpIcon._qwwTexCoordV ~= vMax then
+        pvpIcon:SetTexCoord(0, uMax, 0, vMax)
+        pvpIcon._qwwTexCoordU = uMax
+        pvpIcon._qwwTexCoordV = vMax
+      end
+
+      local size = ThemeValue("pvpIconSize", 12)
+      pvpIcon:SetSize(size, size)
+      pvpIcon:SetVertexColor(1, 1, 1, ThemeValue("pvpIconAlpha", 1))
+      pvpIcon:ClearAllPoints()
+      local offsetX = ThemeValue("pvpIconOffsetX", -6)
+      local offsetY = ThemeValue("pvpIconOffsetY", 0)
+      if line.expandQuest then
+        pvpIcon:SetPoint("RIGHT", line.expandQuest, "LEFT", offsetX, offsetY)
+      else
+        pvpIcon:SetPoint("LEFT", line, "LEFT", offsetX, offsetY)
+      end
+      pvpIcon:Show()
+    else
+      pvpIcon:Hide()
     end
   end
 
@@ -205,14 +287,53 @@ local function StyleLine(line)
   end
 end
 
+local function StyleItemIcon(button)
+  if not button then return end
+
+  local normal = button.GetNormalTexture and button:GetNormalTexture()
+  if normal then
+    normal:ClearAllPoints()
+    normal:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+    normal:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
+    normal:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  end
+
+  local pushed = button.GetPushedTexture and button:GetPushedTexture()
+  if pushed then
+    pushed:ClearAllPoints()
+    pushed:SetPoint("TOPLEFT", button, "TOPLEFT", 3, -3)
+    pushed:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -3, 3)
+    pushed:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  end
+end
+
+local function ResetItemIcon(button)
+  if not button then return end
+
+  local normal = button.GetNormalTexture and button:GetNormalTexture()
+  if normal then
+    normal:ClearAllPoints()
+    normal:SetAllPoints(button)
+    normal:SetTexCoord(0, 1, 0, 1)
+  end
+
+  local pushed = button.GetPushedTexture and button:GetPushedTexture()
+  if pushed then
+    pushed:ClearAllPoints()
+    pushed:SetAllPoints(button)
+    pushed:SetTexCoord(0, 1, 0, 1)
+  end
+end
+
 local function StyleItemButton(button)
-  if not button or button._qwwStyled then return end
+  if not button then return end
 
   local bg = EnsureTexture(button, "itemBG", "BACKGROUND")
   if bg then
     bg:SetTexture(NS.tex.itemBG)
     bg:SetAllPoints(button)
     bg:SetVertexColor(1, 1, 1, ThemeValue("itemBGAlpha", 0.7))
+    bg:SetShown(NS.db.enabled)
   end
 
   if button.SetHighlightTexture then
@@ -223,6 +344,8 @@ local function StyleItemButton(button)
       hl:SetVertexColor(1, 1, 1, ThemeValue("itemHLAlpha", 0.85))
     end
   end
+
+  StyleItemIcon(button)
 
   button._qwwStyled = true
 end
@@ -291,6 +414,12 @@ function NS.HideSkin()
       if line._qwwTextures and line._qwwTextures.divider then
         line._qwwTextures.divider:Hide()
       end
+      if line._qwwTextures and line._qwwTextures.pvpBG then
+        line._qwwTextures.pvpBG:Hide()
+      end
+      if line._qwwTextures and line._qwwTextures.pvpIcon then
+        line._qwwTextures.pvpIcon:Hide()
+      end
       if line._qwwHighlightTexture and line.SetHighlightTexture then
         line:SetHighlightTexture(nil)
         line._qwwHighlightTexture = nil
@@ -311,6 +440,7 @@ function NS.HideSkin()
       if button.SetHighlightTexture then
         button:SetHighlightTexture(nil)
       end
+      ResetItemIcon(button)
       button._qwwStyled = false
     end
   end

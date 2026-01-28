@@ -1,8 +1,8 @@
-## Interface: 11505
+## Interface: 11508, 20505
 ## Title: Questie War Within Skin
 ## Notes: Skint den Questie-Tracker im Stil von „The War Within“ (Retail)
 ## Author: Nightbert
-## Version: 1.0
+## Version: 1.2.1
 ## Dependencies: Questie
 ## SavedVariables: QWWDB
 
